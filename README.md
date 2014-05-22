@@ -1,4 +1,4 @@
-twitterInspector
-================
+WHAT?
+=====
 
-Python script for check who unfollow you on twitter and more.
+Too early for a README.
