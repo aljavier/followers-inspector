@@ -13,7 +13,6 @@ except:
     print "Quitting now\n"
     sys.exit(1)
 
-
 # Just putting this here
 DB_NAME='canttouchthis.db.gpg'
 
