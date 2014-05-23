@@ -258,15 +258,3 @@ class TweepyWrapper(object):
 if __name__ == '__main__':
     tw = TweepyWrapper()
     tw.process_followers()
-               
-
-
-                
-        
-
-
-
-
-
-
-
