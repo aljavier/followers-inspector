@@ -132,7 +132,7 @@ class PersistenceLayer(object):
    def add_unfollower(self, unfollower):
          try:
             cur = self.con.cursor()
-            cur.execute("INSERT INTO tb_unfollowers VALUES(?), ?", unfollower) 
+            cur.execute("INSERT INTO tb_unfollowers VALUES(?,?)", unfollower) 
             con.commit()
          except Exception, e:
             if self.con:
