@@ -1,4 +1,4 @@
-TwitterInspector...not sure if a good name
+TwitterInspector...or whatever
 ==========================================
 
 This script is for know who unfollowed you on `Twitter`, it works like this:
