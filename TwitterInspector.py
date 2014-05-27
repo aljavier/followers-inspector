@@ -133,18 +133,20 @@ class PersistenceLayer(object):
          try:
             cur = self.con.cursor()
             cur.execute("INSERT INTO tb_unfollowers VALUES(?,?)", unfollower) 
-            con.commit()
+            self.con.commit()
+            cur.execute("DELETE FROM tb_followers WHERE Id = ?", unfollower.id)
+            self.con.commit()
          except Exception, e:
             if self.con:
-                con.rollback()
-            print "We got an error: %s\nQuitting now\n" % str(e)
+                self.con.rollback()
+            print "Wow wow We got an error: %s\nQuitting now\n" % str(e)
             sys.exit(1)
 
     
    def __secure(self):
        if os.path.exists(self.file_name[:-4]) and os.path.isfile(self.file_name[:-4]):
            try:
-              raw_input("Get ready to introduce the password for the .gpg file, before press ENTER please...")
+              raw_input("Get ready to introduce the password for store the updated ecnrypted sqlite db, before press ENTER please...")
               output = subprocess.Popen(['gpg','-c',self.file_name[:-4]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
               while output.poll() == None:
                   output.stdout.readline()
@@ -180,7 +182,6 @@ class TweepyWrapper(object):
                 verifier = raw_input("Introduce access token >>>> ")
                 verifier = verifier.strip()
                 self.__auth.get_access_token(verifier)
-                self.__auth.set_access_token(self.__auth.access_token.key, self.__auth.access_token.secret)
                 auth = ((consumer_key,consumer_secret,self.__auth.access_token.key, self.__auth.access_token.secret))
                 self.__data.insert_auth(auth)
             except tweepy.TweepError, e:
@@ -194,10 +195,15 @@ class TweepyWrapper(object):
         self.__preload()
     
     def __preload(self):
-        followers = tweepy.Cursor(self.api.followers).items()
-        self.db_followers = self.__data.get_followers()
-        for follower in followers:
-            self.real_followers.append(follower)
+        try:
+           followers = tweepy.Cursor(self.api.followers).items()
+           self.db_followers = self.__data.get_followers()
+           for follower in followers:
+               self.real_followers.append(follower)
+        except tweepy.TweepError,e:
+           print str(e)
+           print "Quitting now!\n"
+           sys.exit(1)
 
     # This method will no be use in this version(at least not by me), 'cause i would have to provide
     # twitter my number phone in order to obtain write access for this app and that
@@ -216,6 +222,7 @@ class TweepyWrapper(object):
 
 
     def process_followers(self, follow=False):
+        aux_unfollowers = self.get_unfollowers()
         new_followers=[]
         new_unfollowers=[]
         if follow:
@@ -223,9 +230,9 @@ class TweepyWrapper(object):
         for follower in self.real_followers:
             is_new_follower = True
             for f in self.db_followers:
-                if follower.id == f['id']:
+                if follower.id == f[0]:
                     is_new_follower= False
-                    if follower.screen_name != f['screen_name']:
+                    if follower.screen_name != f[1]:
                         t_follower = ((follower.id, follower.screen_name))
                         self.__data.update_follower(t_follower)
                     break
@@ -233,16 +240,26 @@ class TweepyWrapper(object):
                 t_follower = ((follower.id, follower.screen_name))
                 self.__data.add_follower(t_follower)
                 new_followers.append(follower)
-            for follower in self.db_followers:
-                is_unfollower = True
-                for f in self.real_followers:
-                    if follower['id'] == f.id:
-                        is_unfollower = False
-                        break
-                if is_unfollower:
-                    self.__data.add_unfollower(follower.id, follower.screen_name)
+        # Searching for new unfollowers
+        for follower in self.db_followers:
+           is_unfollower = True
+           for f in self.real_followers:
+               if follower['id'] == f.id:
+                  is_unfollower = False
+                  break
+           # Then we check if is already in unfollowers table
+           if is_unfollower:
+              for x in aux_unfollowers:
+                  if follower[0] == x[0]:
+                     is_unfollower = False  # It's unfollower but already registred on db
+                     break
+           if is_unfollower:
+               new_unfollowers.append((follower[0], follower[1]))
+               self.__data.add_unfollower((follower[0], follower[1]))
         # Print resume by console
-        print "Currently friends on twitter: {0}\nAmount of unfollowers registered on db: {1}\n".format(len(self.real_followers), len(self.__data.get_unfollowers()))
+        unfollowers = self.__data.get_unfollowers()
+        followers = self.__data.get_followers()
+        print "Currently followers on twitter: {0}\nAmount of unfollowers registered on db: {1}\n".format(len(followers), len(unfollowers))
         if len(new_followers) > 0:
            print "New followers: "
            for follower in new_followers:
@@ -250,9 +267,22 @@ class TweepyWrapper(object):
         else:
             print "You have 0 new followers registered in our db"
         if len(new_unfollowers) > 0:
+            print "New unfollowers: "
             for unfollower in new_unfollowers:
                 print "[-] " + unfollower.screen_name + " ---- " + "https://twitter.com/" + unfollower.screen_name + "\n"
-        
+        else:
+            print "You have 0 new unfollowers since the last time we check it"
+
+        if len(unfollowers) > 0:
+            print " __-- All the people who unfollowed you(that we could know) --__"
+            for unfollower in unfollowers:
+                print "[-] " + unfollower[1] + " ---- " + "https://twitter.com/" + unfollower[1] + "\n"
+        #if len(followers) > 0:
+        #    print " __-- All the people who followe you --__"
+        #    for follower in followers:
+        #        print "[-] " + follower[1] + " ---- " + "https://twitter.com/ " + follower[1] + "\n"
+
+
 
 if __name__ == '__main__':
     tw = TweepyWrapper()
