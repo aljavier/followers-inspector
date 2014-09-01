@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sqlite3 as lite
-import datime
+import dattime
 import sys
 import traceback
 
@@ -15,54 +15,12 @@ except:
     sys.exit(-1)
 
 # Some config variables
-CONSUMER_KEY= = "YOUR_CONSUMER_KEY"
+CONSUMER_KEY = "YOUR_CONSUMER_KEY"
 CONSUMER_SECRET = "YOUR_CONSUMER_SECRET"
 USER_NAME = "n3x07" # We need it for the follow_all method, to check if someone follow you already or no
 
-class DbConnection(object):
-    """Abstract class for the persistent storage on database."""
-    
-    def __init__(self, DB_NAME, DB_HOST="SQLite", USER=None, PASS=None):
-        """Abstract method to be implemented for the connection"""
-        raise NotImplementedError("You must implement this method!")
-    
-    def connect():
-        """The method that start the connection to the database."""
-        raise NotImplementedError("You must implement this method!")
 
-    def get_all(self,table_name):
-        """Return all records from table_name."""
-        raise NotImplementedError("You must implement this method!")
-
-    def get(self, id, table_name):
-        """Return an element with the id provided from table_name."""
-        raise NotImplementedError("You must implement this method!")
-
-    def update(self, id, table_name, **kwargs):
-        """
-        Update the element specified as parameter on the table_name and 
-        return True if there were not error, False otherwise.
-        """
-        raise NotImplementedError("You must implement this method!")
-
-    def delete(self, id, table_name, **kwargs):
-        """
-        Delete the records on table_name with the id specified and any other
-        optional attributes.
-        """
-        raise NotImplementedError("You must implement this method!")
-
-    def add(self, table_name, **kwargs):
-        """Insert a new record on table_name with the data provided in **kwargs."""
-        raise NotImplementedError("You must implement this method!")
-
-    def seed():
-        """This method create the neede tables, and could populate also,the database."""
-        raise NotImplementedError("You must implement this method!")
-
-
-
-class SQLiteConnection(DbConnection):
+class SQLiteConnection(object):
     """Concrete class for the data persistent on database using SQLite."""
     
     def __init__(self,DB_NAME, DB_HOST="SQLite", USER=None, PASS=None):
@@ -82,7 +40,7 @@ class SQLiteConnection(DbConnection):
             print("Quitting now...")
             sys.exit(-1)
 
-    def get_all(self, table_name, LIMIT=None):
+    def get_all(self, table_name="twitter_users", LIMIT=None):
         """This method will return a list of dictionaries with all available records or an empty list."""
         try:
             cur = self.conn.cursor()
@@ -99,11 +57,11 @@ class SQLiteConnection(DbConnection):
         finally:
             cur.close()
 
-    def get(self, id, table_name):
-        """This method return a dictionary(record) from table_name with the specified id or None."""
+    def get(self, user_id, table_name="twitter_users"):
+        """This method return a dictionary(record) from table_name with the specified user_id or None."""
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT * FROM " + table_name + " WHERE id = ?", id)
+            cur.execute("SELECT * FROM " + table_name + " WHERE user_id = ?", user_id)
             row = cur.fetchone()
             return row
         except lite.Error:
@@ -112,14 +70,14 @@ class SQLiteConnection(DbConnection):
         finally:
             cur.close()
 
-    def update(self, id, table_name, user_id, screen_name):
-        """This method update the record(s) with the specified id."""
+    def update(self, user_id, screen_name, is_follower, table_name="twitter_users"):
+        """This method update the record(s) with the specified user_id."""
         try:
             cur = self.conn.cursor()
             if kwargs:
                 # Look that we are expecting a dictionary with this keys and some values, obligatory.
-                sql = "UPDATE " + table_name + " SET user_id = ?, scree_name = ?, date = ? WHERE id = ?"
-                cur.execute(sql, user_id, screen_name, id, datetime.now())
+                sql = "UPDATE " + table_name + " SET user_id = ?, screen_name = ?, date = ?, is_follower =? WHERE user_id = ?"
+                cur.execute(sql, user_id, screen_name, datetime.now()), is_follower, user_id)
                 self.conn.commit()
                 print("%d records have been updated!" % cur.rowcount)
         except lite.Error:
@@ -130,11 +88,11 @@ class SQLiteConnection(DbConnection):
         finally:
             cur.close()
 
-    def delete(self, id, table_name):
-        """This method remove record(s) from the database with the specified id."""
+    def delete(self, user_id, table_name="twitter_users"):
+        """This method remove record(s) from the database with the specified user_id."""
         try:
             cur = self.conn.cursor()
-            cur.execute("DELETE FROM " + table_name + " WHERE id = ?", id)
+            cur.execute("DELETE FROM " + table_name + " WHERE user_id = ?", user_id)
             self.conn.commit()
         except lite.Error:
             if self.conn:
@@ -156,7 +114,7 @@ class SQLiteConnection(DbConnection):
             print("We got an error over here, check the description below.")
             print(traceback.format_exc())
 
-    def add(self, table_name, user_id, screen_name):
+    def add(self, user_id, screen_name, table_name="twitter_users"):
         """This method insert a new record in table_name with user_id and screen_name and return the id."""
         try:
             cur = self.conn.cursor()
@@ -178,8 +136,7 @@ class SQLiteConnection(DbConnection):
             cur = self.conn.cursor()
             sql = """
                      CREATE TABLE credentials(id integer primary key autoincrement, key text, secret text);
-                     CREATE TABLE followers(id integer primary key, user_id text, scree_name text, date text);
-                     CREATE TABLE unfollowers(id integer primary key, user_id text, screen_name text, date text);
+                     CREATE TABLE twitter_users(id integer primary key, user_id text, screen_name text, date text, is_follower integer);
                   """
             cur.executescript(sql)
             self.conn.commit()
@@ -198,13 +155,13 @@ class SQLiteConnection(DbConnection):
 class TwitterInspector(object):
     """The class that interact with the Twitter API throught tweepy library."""
    
-   def __init__(self, db_name, consumer_key, consumer_secret, key=None, secret=None):
+    def __init__(self, db_name, consumer_key, consumer_secret, key=None, secret=None):
         self.__data = SQLiteConnection(db_name)
         self.followers = []
         self.unfollowers = self.__data.get_all("unfollowers")
         self.api = None
         try:
-           self.__auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+            self.__auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
         except tweepy.TweepError:
             print("We got an error with the consumer access token, more info below.")
             print(traceback.format_exc())   
@@ -257,7 +214,7 @@ class TwitterInspector(object):
     # Yeah, I know, i'm very paranoid, but paranoid is good...most of the time.
     # So, this method have not been tested, but should work, right? right?! :=]
     def follow_all(self):
-        """This method will follow everybody that follow you, always that your permissions for the app allow it.""""
+        """This method will follow everybody that follow you, always that your permissions for the app allow it."""
         for follower in self.followers:
             if not self.api.exists_friendship(follower.screen_name, USER_NAME):
                 follower.create_friendship(follower.screen_name)
@@ -266,9 +223,9 @@ class TwitterInspector(object):
            
 
     def process_all(self):
-        """This is the method process(determine) followers and unfollowers."""
+        """This is the method that process(determine) followers and unfollowers."""
         db_followers = self.__data.get_all("followers") 
-        
+        new_unfollowers = []
 
 
 class GmailSender(object):
