@@ -50,7 +50,7 @@ class DbConnection(object):
         """Insert a new record on table_name with the data provided in **kwargs."""
         raise NotImplementedError("You must implement this method!")
 
-    def seed(script):
+    def seed():
         """This method create the neede tables, and could populate also,the database."""
         raise NotImplementedError("You must implement this method!")
 
@@ -58,6 +58,7 @@ class DbConnection(object):
 
 class SQLiteConnection(DbConnection):
     """Concrete class for the data persistent on database using SQLite."""
+    
     def __init__(self,DB_NAME, DB_HOST="SQLite", USER=None, PASS=None):
         """The constructor, DB_NAME is the name of the sqlite database,
            neither DB_HOST, USER or PASS are needed here.
@@ -73,7 +74,7 @@ class SQLiteConnection(DbConnection):
             self.conn.row_factory = lite.Row
         except Exception as e:
             print("We got an error here, printing more info below.")
-            print traceback.format_exc()
+            print(traceback.format_exc())
             print("Quitting now...")
             sys.exit(-1)
 
@@ -86,7 +87,7 @@ class SQLiteConnection(DbConnection):
             return rows
         except Exception:
             print("We got an error here, printing more info below.")
-            print traceback.format_exc()
+            print(traceback.format_exc())
         finally:
             cur.close()
 
@@ -99,7 +100,7 @@ class SQLiteConnection(DbConnection):
             return row
         except Exception:
             print("We got an error here, printing more info below.")
-            print traceback.format_exc()
+            print(traceback.format_exc())
         finally:
             cur.close()
 
@@ -117,7 +118,7 @@ class SQLiteConnection(DbConnection):
             if self.conn:
                self.conn.rollback()
             print("We got an error here, printing more info below.")
-            print traceback.format_exc()
+            print(traceback.format_exc())
         finally:
             cur.close()
 
@@ -131,27 +132,46 @@ class SQLiteConnection(DbConnection):
             if self.conn:
                self.conn.rollback()
             print("We got an error here, printing more info below.")
-            print traceback.format_exc()
+            print(traceback.format_exc())
         finally:
             cur.close()
+
+    def raw_sql(self, sql):
+        """This method will run an sql sentence passed as argument, it does not inherit from DbConnection"""
+        try:
+            cur = self.conn.cursor()
+            cur.execute(sql)
+            self.conn.commit()
+        except Exception:
+            if self.conn:
+                self.conn.rollback()
+            print("We got an error over here, check the description below.")
+            print(traceback.format_exc())
 
     def add(self, table_name, user_id, screen_name):
         """This method insert a new record in table_name with user_id and screen_name and return the id."""
         try:
             cur = self.conn.cursor()
-            cur.execute("INSERT INTO " + table_name + " (user_id, screen_name) VALUES(user_id, screen_name)")
+            cur.execute("INSERT INTO " + table_name + " (user_id, screen_name) VALUES(?,?)",user_id, screen_name)
             self.conn.commit()
             return cur.lastrowid
         except Exception:
             if self.conn:
                 self.conn.rollback()
             print("We got an error over here, more info below.")
-            print traceback.format_exc()
+            print(traceback.format_exc())
         finally:
             cur.close()
 
-    def seed(self,script):
-        pass
+    def seed(self):
+        """This method will create the tables needed for this app."""
+        try:
+            cur = self.conn.cursor()
+            sql = """
+                     CREATE TABLE credentials(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, secret TEXT)
+
+
+
 
     def __str_(self):
         return "Database connection for database named %s." % self.db_name
