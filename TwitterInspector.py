@@ -14,9 +14,14 @@ except:
     print("On mostly unix-like systems the easier way to install it is: pip install tweepy.")
     sys.exit(-1)
 
+# Some config variables
+CONSUMER_KEY= = "YOUR_CONSUMER_KEY"
+CONSUMER_SECRET = "YOUR_CONSUMER_SECRET"
+USER_NAME = "n3x07" # We need it for the follow_all method, to check if someone follow you already or no
 
 class DbConnection(object):
     """Abstract class for the persistent storage on database."""
+    
     def __init__(self, DB_NAME, DB_HOST="SQLite", USER=None, PASS=None):
         """Abstract method to be implemented for the connection"""
         raise NotImplementedError("You must implement this method!")
@@ -77,11 +82,15 @@ class SQLiteConnection(DbConnection):
             print("Quitting now...")
             sys.exit(-1)
 
-    def get_all(self, table_name):
+    def get_all(self, table_name, LIMIT=None):
         """This method will return a list of dictionaries with all available records or an empty list."""
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT * FROM %s" % table_name)
+            sql = "SELECT * FROM " + table_name
+            if LIMIT is None:
+               cur.execute("SELECT * FROM %s" % table_name)
+            else:
+                cur.execute(sql + " LIMIT " + LIMIT) # This will not be really needed, except for get the credentials
             rows = cur.fetchall()
             return rows
         except lite.Error:
@@ -187,12 +196,81 @@ class SQLiteConnection(DbConnection):
     
 
 class TwitterInspector(object):
-    pass
+    """The class that interact with the Twitter API throught tweepy library."""
+   
+   def __init__(self, db_name, consumer_key, consumer_secret, key=None, secret=None):
+        self.__data = SQLiteConnection(db_name)
+        self.followers = []
+        self.unfollower = []
+        self.api = None
+        try:
+           self.__auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+        except tweepy.TweepError:
+            print("We got an error with the consumer access token, more info below.")
+            print(traceback.format_exc())   
+            print("This is critical! Quitting now...")
+            sys.exit(-1)
+        # Autentificate the client
+        self.__autentificate()
 
-class MailSender(object):
-    pass
+    def __autentificate(self):
+        """This method deal with the autorization of the script with Twitter"""
+        credentials = self.__data.get_all("credentials", LIMIT=1) # We just need one, right? right?!
+        if credentials is None:
+            print("There aren't any credential in the database!!!")
+            answer = raw_input("Would do you like to add any now? >>> ")
+            answer = answer.strip().lower()
+            if answer == "yes" or answer == "y":
+                try:
+                    url = tweepy.OAuthHandler.get_authorization_url()
+                    print("You can get your access token going with your web browser to this url >>> %s" % url)
+                    verifier = raw_input("Please introduce the verifier code you got >>> ").strip()
+                    self.__auth.get_access_token(verifier)
+                    key = self.__auth.access_token.key
+                    secret = self.__auth.access_token.secret
+                    # Now let's store those credentials for later on
+                    self.__data.raw_sql("INSERT INTO credentials(key, secret) VALUES(?, ?)", key, secret)
+                except tweepy.TweepError:
+                    print("An error happened trying to set the access token, see info below.")
+                    print(traceback.format_exc())
+                    print("This is a critical error! Quitting now...")
+                    sys.exit(-1)
+            else:
+                print("You didn't answer yes and without access token we cannot work, so...")
+                print("Good bye old friend!")
+                sys.exit(-1)
+        else:
+            self.__auth.set_access_token(key, secret)
 
-class GmailSender(MailSender):
+        try:
+          # All good so far, so we get the api object
+          self.api = tweepy.API(self.__auth)
+        except tweepy.TweepError:
+            print("Uff, we were so close and suddenly an error, see below for more info...")
+            print(traceback.format_exc)
+            print("It's a critical error! So we wuitting now...\nGood bye!")
+            sys.exit(-1)
+
+    # I'm not thinking in use this methd, but is usefull for some folks
+    # The reason why I don't wanna use it, it's because I don't like the data
+    # I have to provide to twitter to allow me do this, like my phone number.
+    # Yeah, I know, i'm very paranoid, but paranoid is good...most of the time.
+    # So, this method have not been tested, but should work, right? right?! :=]
+    def follow_all(self):
+        """This method will follow everybody that follow you, always that your permissions for the app allow it.""""
+        for follower in self.followers:
+            if not self.api.exists_friendship(follower.screen_name, USER_NAME):
+                follower.create_friendship(follower.screen_name)
+                print("[+] You're now following {0}, check his/her profile\
+                        at https://twitter.com/{0}".format(follower.scree_name))
+           
+
+    def process_all(self):
+        """This is the method that retry the users from database and decide who is a new follower or an unfollower."""
+        db_followers = self.__data. 
+
+
+class GmailSender(object):
     pass
 
 
