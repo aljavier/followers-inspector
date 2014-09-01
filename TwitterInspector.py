@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sqlite3 as lite
-import dattime
+import datetime
 import sys
 import traceback
 
@@ -17,15 +17,14 @@ except:
 # Some config variables
 CONSUMER_KEY = "YOUR_CONSUMER_KEY"
 CONSUMER_SECRET = "YOUR_CONSUMER_SECRET"
-USER_NAME = "n3x07" # We need it for the follow_all method, to check if someone follow you already or no
 
 
 class SQLiteConnection(object):
-    """Concrete class for the data persistent on database using SQLite."""
+    """class for the data persistence on database  SQLite."""
     
-    def __init__(self,DB_NAME, DB_HOST="SQLite", USER=None, PASS=None):
-        """DB_NAME is the name of the sqlite database, the others arguments are not needed here."""
-        self.db_name = DB_NAME
+    def __init__(self, db_name):
+        """db_name is the name of the sqlite database, no others arguments needed here."""
+        self.db_name = db_name
         self.conn = None
 
     def connect(self):     
@@ -40,15 +39,17 @@ class SQLiteConnection(object):
             print("Quitting now...")
             sys.exit(-1)
 
-    def get_all(self, table_name="twitter_users", LIMIT=None):
+    def get_all(self, table_name="twitter_users", is_follower=None, LIMIT=None):
         """This method will return a list of dictionaries with all available records or an empty list."""
         try:
             cur = self.conn.cursor()
             sql = "SELECT * FROM " + table_name
-            if LIMIT is None:
-               cur.execute(sql)
-            else:
-                cur.execute(sql + " LIMIT " + LIMIT) # This will not be really needed, except for get the credentials
+            if is_follower is not None:
+                sql = sql + " WHERE is_follower = " + is_follower 
+            if LIMIT is not None:
+                # Rarely both filter will be use together, I guess
+               sql = sql + " LIMIT " + LIMIT  # In fact, LIMIT will be maybe never use here
+            cur.execute(sql) 
             rows = cur.fetchall()
             return rows
         except lite.Error:
@@ -57,11 +58,14 @@ class SQLiteConnection(object):
         finally:
             cur.close()
 
-    def get(self, user_id, table_name="twitter_users"):
+    def get(self, user_id=None, table_name="twitter_users"):
         """This method return a dictionary(record) from table_name with the specified user_id or None."""
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT * FROM " + table_name + " WHERE user_id = ?", user_id)
+            sql = "SELECT * FROM " + table_name  # It will be just like this if we quering the credentials table
+            if user_id is not None:
+                sql = sql + " WHERE user_id = ?" # This will be usefull for fetch  result from the twitter users table
+            cur.execute( user_id)
             row = cur.fetchone()
             return row
         except lite.Error:
@@ -70,14 +74,16 @@ class SQLiteConnection(object):
         finally:
             cur.close()
 
-    def update(self, user_id, screen_name, is_follower, table_name="twitter_users"):
-        """This method update the record(s) with the specified user_id."""
+    def update(self, user_id, screen_name, is_follower=None, table_name="twitter_users"):
+        """This method update the record(s) with the specified user_id, just users table no credentials."""
+        if is_follower is None:
+            raise Exception("You must specified the value of is_follower!")
         try:
             cur = self.conn.cursor()
             if kwargs:
-                # Look that we are expecting a dictionary with this keys and some values, obligatory.
-                sql = "UPDATE " + table_name + " SET user_id = ?, screen_name = ?, date = ?, is_follower =? WHERE user_id = ?"
-                cur.execute(sql, user_id, screen_name, datetime.now()), is_follower, user_id)
+                # I implied user_id never changed on twitter but that screen_name does
+                sql = "UPDATE " + table_name + " SET screen_name = ?, date = ?, is_follower =? WHERE user_id = ?"
+                cur.execute(sql, screen_name, datetime.now(), is_follower, user_id)
                 self.conn.commit()
                 print("%d records have been updated!" % cur.rowcount)
         except lite.Error:
@@ -149,7 +155,11 @@ class SQLiteConnection(object):
             cur.close()
 
     def __str__(self):
-        return "Database connection for database named %s." % self.db_name
+        if self.conn:
+            version = self.raw_sql("SELECT SQL_VERSION()")
+            return "SQLite %s - using database name %s" % (version, self.db_name)
+        else:
+            return "SQLite object - database file name: %s" % self.db_name
     
 
 class TwitterInspector(object):
@@ -157,8 +167,9 @@ class TwitterInspector(object):
    
     def __init__(self, db_name, consumer_key, consumer_secret, key=None, secret=None):
         self.__data = SQLiteConnection(db_name)
-        self.followers = []
-        self.unfollowers = self.__data.get_all("unfollowers")
+        self.followers = [] # Followers fetched from Twitter 
+        self.db_followers = self.__data.get_all(is_followers=1) # Followers from db 
+        self.unfollowers = self.__data.get_all(is_follower=0) # Unfollowers from db
         self.api = None
         try:
             self.__auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -172,7 +183,7 @@ class TwitterInspector(object):
 
     def __autentificate(self):
         """This method deal with the autorization of the script with Twitter"""
-        credentials = self.__data.get_all("credentials", LIMIT=1) # We just need one, right? right?!
+        credentials = self.__data.get("credentials") # We just need one, right? right?!
         if credentials is None:
             print("There aren't any credential in the database!!!")
             answer = raw_input("Would do you like to add any now? >>> ")
@@ -199,9 +210,12 @@ class TwitterInspector(object):
         else:
             self.__auth.set_access_token(key, secret)
 
+    def initialize(self):
+        """Method for inicialize the api and fetch the followers from twitter."""
         try:
-          # All good so far, so we get the api object
-          self.api = tweepy.API(self.__auth)
+            # All good so far, so we get the api object and fetch the followers
+            self.api = tweepy.API(self.__auth)
+            self.followers = tweepy.Cursor(self.api.followers).items()
         except tweepy.TweepError:
             print("Uff, we were so close and suddenly an error, see below for more info...")
             print(traceback.format_exc)
@@ -211,22 +225,53 @@ class TwitterInspector(object):
     # I'm not thinking in use this methd, but is usefull for some folks
     # The reason why I don't wanna use it, it's because I don't like the data
     # I have to provide to twitter to allow me do this, like my phone number.
-    # Yeah, I know, i'm very paranoid, but paranoid is good...most of the time.
+    # Yeah, I know, I'm very paranoid, but paranoid is good...most of the time.
     # So, this method have not been tested, but should work, right? right?! :=]
-    def follow_all(self):
+    def follow_all(self, user_name):
         """This method will follow everybody that follow you, always that your permissions for the app allow it."""
         for follower in self.followers:
-            if not self.api.exists_friendship(follower.screen_name, USER_NAME):
+            if not self.api.exists_friendship(follower.screen_name, user_name):
                 follower.create_friendship(follower.screen_name)
                 print("[+] You're now following {0}, check his/her profile\
-                        at https://twitter.com/{1}".format(follower.screen_name))
-           
+                        at https://twitter.com/{0}".format(follower.screen_name))
 
-    def process_all(self):
-        """This is the method that process(determine) followers and unfollowers."""
-        db_followers = self.__data.get_all("followers") 
-        new_unfollowers = []
 
+    def process_followers(self):
+        """This is the method that process(determine) the followers."""
+        # Structural is kind of more suitable than functional in this case
+        for tw in self.followers:
+            for db in db_followers:
+                # If tw is already a registered follower in our db we jump to check the others if any
+                if tw.user_id == db['user_id']: break
+            else:
+                print("We have a new follower and his/her name is %s" % tw.screen_name)
+                # We check if is someone who unfollowed us before and follow back again
+                for un in self.unfollowers:
+                    if tw.user_id == un['user_id']:
+                       print("And he/she unfollowed us before but now is back!!!")
+                       self.__data.update(tw.user_id, tw.screen_name, is_follower=1) # Update is_follower from False to True
+                       break
+                else: # It's a new follower, according to our db never has followed us
+                    id_new = self.__data.add(tw.user_id, tw.screen_name)
+                    if id_new: print("Follower %s has succesfully been added with id %d!" % (tw.screen_name, id_new))
+        # End of this crazy *loopception*
+
+   
+    def process_unfollowers(self):
+        """Method for process (determine) new unfollowers."""
+        # We go structural again here as in the previous one, I don't see other way
+        any_unfollower = False
+        for db in self.db_followers:
+            for tw in self.followers:
+                # We jump to other element if any, 'cause this is not an unfollower
+                if db['user_id'] == tw.user_id: break
+            else: # Someone who unfollowed you here ;(
+                self.__data.update(db['user_id'], db['screen_name'], is_follower=0) # That follower is now an unfollower on db
+                if not any_unfollower: any_unfollower = True
+                print("Vaya! Someone named %s has unfollowed you!", db['screen_name'])
+                print("This is the profile of the *individual* https://twitter.com/%s" % db['user_id'])
+        if any_unfollower:
+            print("Awesome, nobody have unfollowed you!")
 
 class GmailSender(object):
     pass
