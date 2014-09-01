@@ -4,7 +4,7 @@ import sqlite3 as lite
 import sys
 import traceback
 
-# If tweepy is not install exit
+# If tweepy is not installed exit
 try:
     import tweepy
 except:
@@ -60,9 +60,7 @@ class SQLiteConnection(DbConnection):
     """Concrete class for the data persistent on database using SQLite."""
     
     def __init__(self,DB_NAME, DB_HOST="SQLite", USER=None, PASS=None):
-        """The constructor, DB_NAME is the name of the sqlite database,
-           neither DB_HOST, USER or PASS are needed here.
-        """
+        """DB_NAME is the name of the sqlite database, the others arguments are not needed here."""
         self.db_name = DB_NAME
         self.conn = None
 
@@ -72,7 +70,7 @@ class SQLiteConnection(DbConnection):
             self.conn = lite.connect(self.db_name)
             # In order to get the objects always as dictionary we set this:
             self.conn.row_factory = lite.Row
-        except Exception as e:
+        except lite.Error:
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
             print("Quitting now...")
@@ -85,7 +83,7 @@ class SQLiteConnection(DbConnection):
             cur.execute("SELECT * FROM %s" % table_name)
             rows = cur.fetchall()
             return rows
-        except Exception:
+        except lite.Error:
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
         finally:
@@ -98,7 +96,7 @@ class SQLiteConnection(DbConnection):
             cur.execute("SELECT * FROM " + table_name + " WHERE id = ?", id)
             row = cur.fetchone()
             return row
-        except Exception:
+        except lite.Error:
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
         finally:
@@ -114,7 +112,7 @@ class SQLiteConnection(DbConnection):
                 cur.execute(sql, user_id, screen_name, id)
                 self.conn.commit()
                 print("%d records have been updated!" % cur.rowcount)
-        except Exception:
+        except lite.Error:
             if self.conn:
                self.conn.rollback()
             print("We got an error here, printing more info below.")
@@ -128,7 +126,7 @@ class SQLiteConnection(DbConnection):
             cur = self.conn.cursor()
             cur.execute("DELETE FROM " + table_name + " WHERE id = ?", id)
             self.conn.commit()
-        except Exception:
+        except lite.Error:
             if self.conn:
                self.conn.rollback()
             print("We got an error here, printing more info below.")
@@ -142,7 +140,7 @@ class SQLiteConnection(DbConnection):
             cur = self.conn.cursor()
             cur.execute(sql)
             self.conn.commit()
-        except Exception:
+        except lite.Error:
             if self.conn:
                 self.conn.rollback()
             print("We got an error over here, check the description below.")
@@ -155,7 +153,7 @@ class SQLiteConnection(DbConnection):
             cur.execute("INSERT INTO " + table_name + " (user_id, screen_name) VALUES(?,?)",user_id, screen_name)
             self.conn.commit()
             return cur.lastrowid
-        except Exception:
+        except lite.Error:
             if self.conn:
                 self.conn.rollback()
             print("We got an error over here, more info below.")
@@ -168,18 +166,26 @@ class SQLiteConnection(DbConnection):
         try:
             cur = self.conn.cursor()
             sql = """
-                     CREATE TABLE credentials(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, secret TEXT)
+                     CREATE TABLE credentials(id integer primary key autoincrement, key text, secret text);
+                     CREATE TABLE followers(id integer primary key, user_id text, scree_name text);
+                     CREATE TABLE unfollowers(id integer primary key, user_id text, screen_name text);
+                  """
+            cur.executescript(sql)
+            self.conn.commit()
+        except lite.Error:
+            if self.conn:
+                self.conn.rollback()
+            print("We got an error here, more info below.")
+            print(traceback.format_exc())
+        finally:
+            cur.close()
 
-
-
-
-    def __str_(self):
+    def __str__(self):
         return "Database connection for database named %s." % self.db_name
     
 
 class TwitterInspector(object):
     pass
-
 
 class MailSender(object):
     pass
