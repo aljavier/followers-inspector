@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sqlite3 as lite
+import datime
 import sys
 import traceback
 
@@ -108,8 +109,8 @@ class SQLiteConnection(DbConnection):
             cur = self.conn.cursor()
             if kwargs:
                 # Look that we are expecting a dictionary with this keys and some values, obligatory.
-                sql = "UPDATE " + table_name + " SET user_id = ?, scree_name = ? WHERE id = ?"
-                cur.execute(sql, user_id, screen_name, id)
+                sql = "UPDATE " + table_name + " SET user_id = ?, scree_name = ?, date = ? WHERE id = ?"
+                cur.execute(sql, user_id, screen_name, id, datetime.now())
                 self.conn.commit()
                 print("%d records have been updated!" % cur.rowcount)
         except lite.Error:
@@ -150,7 +151,8 @@ class SQLiteConnection(DbConnection):
         """This method insert a new record in table_name with user_id and screen_name and return the id."""
         try:
             cur = self.conn.cursor()
-            cur.execute("INSERT INTO " + table_name + " (user_id, screen_name) VALUES(?,?)",user_id, screen_name)
+            sql = "INSERT INTO " + table_name + " (user_id, screen_name, date) VALUES(?, ?, ?)"
+            cur.execute(user_id, screen_name, datetime.now())
             self.conn.commit()
             return cur.lastrowid
         except lite.Error:
@@ -167,8 +169,8 @@ class SQLiteConnection(DbConnection):
             cur = self.conn.cursor()
             sql = """
                      CREATE TABLE credentials(id integer primary key autoincrement, key text, secret text);
-                     CREATE TABLE followers(id integer primary key, user_id text, scree_name text);
-                     CREATE TABLE unfollowers(id integer primary key, user_id text, screen_name text);
+                     CREATE TABLE followers(id integer primary key, user_id text, scree_name text, date text);
+                     CREATE TABLE unfollowers(id integer primary key, user_id text, screen_name text, date text);
                   """
             cur.executescript(sql)
             self.conn.commit()
