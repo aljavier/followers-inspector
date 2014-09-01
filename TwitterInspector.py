@@ -88,7 +88,7 @@ class SQLiteConnection(DbConnection):
             cur = self.conn.cursor()
             sql = "SELECT * FROM " + table_name
             if LIMIT is None:
-               cur.execute("SELECT * FROM %s" % table_name)
+               cur.execute(sql)
             else:
                 cur.execute(sql + " LIMIT " + LIMIT) # This will not be really needed, except for get the credentials
             rows = cur.fetchall()
@@ -201,7 +201,7 @@ class TwitterInspector(object):
    def __init__(self, db_name, consumer_key, consumer_secret, key=None, secret=None):
         self.__data = SQLiteConnection(db_name)
         self.followers = []
-        self.unfollower = []
+        self.unfollowers = self.__data.get_all("unfollowers")
         self.api = None
         try:
            self.__auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -248,7 +248,7 @@ class TwitterInspector(object):
         except tweepy.TweepError:
             print("Uff, we were so close and suddenly an error, see below for more info...")
             print(traceback.format_exc)
-            print("It's a critical error! So we wuitting now...\nGood bye!")
+            print("/!\ It's a critical error! So we quitting now...\nGood bye!")
             sys.exit(-1)
 
     # I'm not thinking in use this methd, but is usefull for some folks
@@ -262,12 +262,13 @@ class TwitterInspector(object):
             if not self.api.exists_friendship(follower.screen_name, USER_NAME):
                 follower.create_friendship(follower.screen_name)
                 print("[+] You're now following {0}, check his/her profile\
-                        at https://twitter.com/{0}".format(follower.scree_name))
+                        at https://twitter.com/{1}".format(follower.screen_name))
            
 
     def process_all(self):
-        """This is the method that retry the users from database and decide who is a new follower or an unfollower."""
-        db_followers = self.__data. 
+        """This is the method process(determine) followers and unfollowers."""
+        db_followers = self.__data.get_all("followers") 
+        
 
 
 class GmailSender(object):
