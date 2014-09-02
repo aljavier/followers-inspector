@@ -272,9 +272,34 @@ class TwitterInspector(object):
                 print("This is the profile of the *individual* https://twitter.com/%s" % db['user_id'])
         if any_unfollower:
             print("Awesome, nobody have unfollowed you!")
+     
+    def process_all(self):
+         """Method for initialize and execute all (un)followers operations."""
+         self
 
-class GmailSender(object):
-    pass
+# Function for send mail to a gmail account using MIME-Type
+# Code snippet from http://stackoverflow.com/a/9179103
+def send_mail(user, password, recipient, subject, message): 
+    # Required imports, we do it here and not at the beginning because this function will be optionally
+    import smtplib
+    from email.MIMEMultipart import MIMEMultipart
+    from email.MIMETEXT import MIMEText
+    
+    # MIME data
+    msg = MIMEMultipart()
+    msg['From'] = user
+    msg['To'] = recipient
+    msg'Subject'] = subject
+    msg.attach(MIMEText(message))
+
+    # Server connection and sending email
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.ehlo() # Not really necesary but just in case
+    server.starttls()
+    server.ehlo()
+    server.login(user, password)
+    server.sendmail(user, recipient, msg.as_string())
+    server.close()
 
 
 
