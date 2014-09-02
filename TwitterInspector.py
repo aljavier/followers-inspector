@@ -3,6 +3,7 @@
 import sqlite3 as lite
 import datetime
 import sys
+import os
 import traceback
 
 # If tweepy is not installed exit
@@ -29,10 +30,13 @@ class SQLiteConnection(object):
 
     def connect(self):     
         "This method connect to an embedded SQLite database file."
+        create_tables = False
+        if not os.path.exists(db_name): create_tables = True
         try:
             self.conn = lite.connect(self.db_name)
             # In order to get the objects always as dictionary we set this:
             self.conn.row_factory = lite.Row
+            if create_tables: self.seed()
         except lite.Error:
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
@@ -272,10 +276,61 @@ class TwitterInspector(object):
                 print("This is the profile of the *individual* https://twitter.com/%s" % db['user_id'])
         if any_unfollower:
             print("Awesome, nobody have unfollowed you!")
-     
+    
+
     def process_all(self):
          """Method for initialize and execute all (un)followers operations."""
-         self
+         self.initialize()
+         self.process_followers()
+         self.process_unfollowers()
+
+    
+    def get_time_ago(self,  date):
+        """This method returns *inteligently* the time ago.""" 
+        # We obtain the time in seconds since this person is (un)following us according to our database
+        seconds_ago = (datetime.datetime.now() - date).total_seconds()
+        time_ago = None
+        if seconds_ago < 60:
+             time_ago = round(seconds_ago) + " seconds ago." 
+        elif seconds_ago >= 60 and seconds_ago < 3600: 
+             time_ago = round((seconds_ago / 60)) + " minutes ago."+ 
+        elif seconds_ago >= 3600 and seconds_ago < (24*3600): # (24*3600) == the amount of seconds that a day has
+             time_ago = round((seconds_ago / 60 / 60)) + " hours ago."
+        else:
+            time_ago = round((seconds_ago / 60 / 60 / 24)) + " days ago."
+        return time_ago 
+
+
+    def show_report(self):
+        """This method will execute process_all  and show the report."""
+        # Process and determine new unfollowers and followers
+        self.process_all() 
+        # Get new updated list of followers
+        self.db_followers = self.__data.get_all(is_follower=1)
+        # Get new updated list of unfollowers
+        self.unfollowers = self.__data.get_all(is_follower=0)
+
+        # Print followers
+        print("=" * 80)
+        print("SHOWING ALL FOLLOWERS IN OUR DATABASE RIGHT NOW - QUANTITY %d" % len(self.followers))
+        print("=" * 80)
+        for follower in self.db_followers:
+            time_ago = self.get_time_ago(follower['date'])
+            print("\t[+] {0} - https://twitter.com/{0}".format(follower['screen_name']))
+        
+        # Print unfollowers
+        print("=" * 80)
+        print("SHOWING ALL UNFOLLOWERS IN OUR DATABASE RIGHT NOW - QUANTITY %d" % len(self.unfollowers))
+        print("=" * 80)
+        for follower in self.db_followers:
+            time_ago = self.get_time_ago(follower['date'])
+            print("\t[-] {0} - https://twitter.com/{0} {1}".format(follower['screen_name'], time_ago))
+
+# End of class SQLiteConnection
+
+
+
+
 
 # Function for send mail to a gmail account using MIME-Type
 # Code snippet from http://stackoverflow.com/a/9179103
@@ -285,21 +340,30 @@ def send_mail(user, password, recipient, subject, message):
     from email.MIMEMultipart import MIMEMultipart
     from email.MIMETEXT import MIMEText
     
+    server = None
+
     # MIME data
     msg = MIMEMultipart()
     msg['From'] = user
     msg['To'] = recipient
-    msg'Subject'] = subject
+    msg['Subject'] = subject
     msg.attach(MIMEText(message))
-
+    
     # Server connection and sending email
-    server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.ehlo() # Not really necesary but just in case
-    server.starttls()
-    server.ehlo()
-    server.login(user, password)
-    server.sendmail(user, recipient, msg.as_string())
-    server.close()
+    try:
+       server = smtplib.SMTP('smtp.gmail.com', 587)
+       server.ehlo() # Not really necesary but just in case
+       server.starttls()
+       server.ehlo()
+       server.login(user, password)
+       server.sendmail(user, recipient, msg.as_string())
+    except:
+        print("/!\ We got an error here, see the traceback below for more info!")
+        print(traceback.format_exci())
+    else:
+        print("The message have been successfully sent to gmail adress %s!" % recipient)
+    finally:
+        if server: server.close()
 
 
 
