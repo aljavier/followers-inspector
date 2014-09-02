@@ -15,23 +15,34 @@ except:
     print("On mostly unix-like systems the easier way to install it is: pip install tweepy.")
     sys.exit(-1)
 
-# Some config variables
+# The name for the SQLite database
+DB_NAME = "tw_users.db"
+
+# Can be get it registering an app at https://apps.twitter.com/
 CONSUMER_KEY = "YOUR_CONSUMER_KEY"
 CONSUMER_SECRET = "YOUR_CONSUMER_SECRET"
+
+# Dictionary for the send_mail function, use this keys: 
+# 'to' for recipient, 'from' for the gmail email use to 
+# send the mail and 'passwd' for password.
+# e.g. MAIL={'to' : 'admin@nsa.gob.us', 'subject' : 'Can't touch me!', 
+#'from' : '0x3d@eviless.com', 'passwd' : 'highlysecure123' }
+MAIL = {} 
 
 
 class SQLiteConnection(object):
     """class for the data persistence on database  SQLite."""
-    
+
     def __init__(self, db_name):
         """db_name is the name of the sqlite database, no others arguments needed here."""
         self.db_name = db_name
         self.conn = None
+        self.__connect()
 
-    def connect(self):     
+    def __connect(self):     
         "This method connect to an embedded SQLite database file."
         create_tables = False
-        if not os.path.exists(db_name): create_tables = True
+        if not os.path.exists(self.db_name): create_tables = True
         try:
             self.conn = lite.connect(self.db_name)
             # In order to get the objects always as dictionary we set this:
@@ -45,14 +56,15 @@ class SQLiteConnection(object):
 
     def get_all(self, table_name="twitter_users", is_follower=None, LIMIT=None):
         """This method will return a list of dictionaries with all available records or an empty list."""
+        cur = None
         try:
             cur = self.conn.cursor()
             sql = "SELECT * FROM " + table_name
             if is_follower is not None:
-                sql = sql + " WHERE is_follower = " + is_follower 
+                sql = sql + " WHERE is_follower = " + str(is_follower) 
             if LIMIT is not None:
                 # Rarely both filter will be use together, I guess
-               sql = sql + " LIMIT " + LIMIT  # In fact, LIMIT will be maybe never use here
+               sql = sql + " LIMIT " + str(LIMIT)  # In fact, LIMIT will be maybe never use here
             cur.execute(sql) 
             rows = cur.fetchall()
             return rows
@@ -60,28 +72,30 @@ class SQLiteConnection(object):
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
         finally:
-            cur.close()
+            if cur: cur.close()
 
     def get(self, user_id=None, table_name="twitter_users"):
         """This method return a dictionary(record) from table_name with the specified user_id or None."""
+        cur = None
         try:
             cur = self.conn.cursor()
             sql = "SELECT * FROM " + table_name  # It will be just like this if we quering the credentials table
             if user_id is not None:
-                sql = sql + " WHERE user_id = ?" # This will be usefull for fetch  result from the twitter users table
-            cur.execute( user_id)
+                sql = sql + " WHERE user_id = %s" % str(user_id) 
+            cur.execute(sql)
             row = cur.fetchone()
             return row
         except lite.Error:
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
         finally:
-            cur.close()
+            if cur: cur.close()
 
     def update(self, user_id, screen_name, is_follower=None, table_name="twitter_users"):
         """This method update the record(s) with the specified user_id, just users table no credentials."""
         if is_follower is None:
             raise Exception("You must specified the value of is_follower!")
+        cur = None
         try:
             cur = self.conn.cursor()
             if kwargs:
@@ -96,10 +110,11 @@ class SQLiteConnection(object):
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
         finally:
-            cur.close()
+            if cur: cur.close()
 
     def delete(self, user_id, table_name="twitter_users"):
         """This method remove record(s) from the database with the specified user_id."""
+        cur = None
         try:
             cur = self.conn.cursor()
             cur.execute("DELETE FROM " + table_name + " WHERE user_id = ?", user_id)
@@ -110,10 +125,11 @@ class SQLiteConnection(object):
             print("We got an error here, printing more info below.")
             print(traceback.format_exc())
         finally:
-            cur.close()
+            if cur: cur.close()
 
     def raw_sql(self, sql):
         """This method will run an sql sentence passed as argument, it does not inherit from DbConnection"""
+        cur = None
         try:
             cur = self.conn.cursor()
             cur.execute(sql)
@@ -138,10 +154,11 @@ class SQLiteConnection(object):
             print("We got an error over here, more info below.")
             print(traceback.format_exc())
         finally:
-            cur.close()
+            if cur: cur.close()
 
     def seed(self):
         """This method will create the tables needed for this app."""
+        cur = None
         try:
             cur = self.conn.cursor()
             sql = """
@@ -165,6 +182,13 @@ class SQLiteConnection(object):
         else:
             return "SQLite object - database file name: %s" % self.db_name
     
+    def __del__(self):
+        if self.conn:
+            self.conn.close()
+
+# End of class SQLiteConnection            
+
+
 
 class TwitterInspector(object):
     """The class that interact with the Twitter API throught tweepy library."""
@@ -172,7 +196,7 @@ class TwitterInspector(object):
     def __init__(self, db_name, consumer_key, consumer_secret, key=None, secret=None):
         self.__data = SQLiteConnection(db_name)
         self.followers = [] # Followers fetched from Twitter 
-        self.db_followers = self.__data.get_all(is_followers=1) # Followers from db 
+        self.db_followers = self.__data.get_all(is_follower=1) # Followers from db 
         self.unfollowers = self.__data.get_all(is_follower=0) # Unfollowers from db
         self.api = None
         try:
@@ -187,14 +211,14 @@ class TwitterInspector(object):
 
     def __autentificate(self):
         """This method deal with the autorization of the script with Twitter"""
-        credentials = self.__data.get("credentials") # We just need one, right? right?!
+        credentials = self.__data.get(table_name="credentials") # We just need one, right? right?!
         if credentials is None:
-            print("There aren't any credential in the database!!!")
+            print("There aren't any credentials in the database!!!")
             answer = raw_input("Would do you like to add any now? >>> ")
             answer = answer.strip().lower()
             if answer == "yes" or answer == "y":
                 try:
-                    url = tweepy.OAuthHandler.get_authorization_url()
+                    url = self.__auth.get_authorization_url()
                     print("You can get your access token going with your web browser to this url >>> %s" % url)
                     verifier = raw_input("Please introduce the verifier code you got >>> ").strip()
                     self.__auth.get_access_token(verifier)
@@ -293,7 +317,7 @@ class TwitterInspector(object):
         if seconds_ago < 60:
              time_ago = round(seconds_ago) + " seconds ago." 
         elif seconds_ago >= 60 and seconds_ago < 3600: 
-             time_ago = round((seconds_ago / 60)) + " minutes ago."+ 
+             time_ago = round((seconds_ago / 60)) + " minutes ago." 
         elif seconds_ago >= 3600 and seconds_ago < (24*3600): # (24*3600) == the amount of seconds that a day has
              time_ago = round((seconds_ago / 60 / 60)) + " hours ago."
         else:
@@ -326,9 +350,7 @@ class TwitterInspector(object):
             time_ago = self.get_time_ago(follower['date'])
             print("\t[-] {0} - https://twitter.com/{0} {1}".format(follower['screen_name'], time_ago))
 
-# End of class SQLiteConnection
-
-
+# End of class TwitterInspector
 
 
 
@@ -366,6 +388,26 @@ def send_mail(user, password, recipient, subject, message):
         if server: server.close()
 
 
+if __name__ == '__main__':
+    client = TwitterInspector(DB_NAME, CONSUMER_KEY, CONSUMER_SECRET) 
+    client.show_report()
+    if MAIL:
+        message = "#####  " + len(client.db_followers) + " PEOPLE FOLLOW YOU RIGHT NOW  #####\n"
+        for count, follower in enumerate(client.db_followers):
+            time_ago = client.get_time_ago(follower['date'])
+            message += "\t{0}. - https://twitter.com/{1} {2}".format(count+1, follower['screen_name'], time_ago)  
+        
+        message += "#####  " + len(client.db_followers) + " PEOPLE WHO UNFOLLOWED YOU IN SOME MOMENT  #####\n"
+        for count, unfollower in enumerate(client.unfollowers):
+            time_ago = client.get_time_ago(unfollower['date'])
+            message += "\t{0}. - https://twitter.com/{1} {2}".format(count+1, unfollower['screen_name'], time_ago)
 
-
+        message += "\n\n\###############     END OF REPORT     ###############"
+        try:
+           send_mail(MAIL['from'], MAIL['passwd'], MAIL['to'], MAIL['subject'], message)
+        except:
+            print("we got an error here, read below for more  info.")
+            print(traceback.format_exc())
+        
+    
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
