@@ -1,6 +1,14 @@
 TwitterInspector...or whatever
 ==========================================
 
+                  /!\ WARNING /!\ 
+THERE ARE SO MANY BUGS HERE, I DON'T EVEN THINK IT WORKS
+THE ONLY REASON I LET THIS BRANCH HERE IS FOR HECK LATER
+THE USE OG GNUPG I USE AT FIRST, WHICH IN THE NEW ONE I
+DON'T. SO, THIS VERSION IS COMPLETLY UNUSEFULL.
+                  /!\ WARNING /!\ 
+
+
 This script is for know who unfollowed you on `Twitter`, it works like this:
 At first run it will store all your friends in a `sqlite3` database, so when
 it check again the database and your current friends on twitter, retrieved
