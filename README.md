@@ -21,7 +21,7 @@ to the script when you run it and it ask for it if there are any records
 on the credentials table on the database. 
 
 
-SETTINGS
+SETTING
 ---------
 
 You do this at the beginning of the script file, I prefered to keep this in the 
@@ -81,7 +81,7 @@ and error to a file, something like this:
 It would redirect all output to that file, also it would rewrite it every time.
 You could run the script automatically anytime you want using  *crontab*.
 
-FURTHER CONSIDERATION
+FURTHER CONSIDERATIONS
 ---------------------
 
 Since the script store the `consumer key` and `consumer secret` and the email
