@@ -21,7 +21,7 @@ on the credentials table on the database.
 
 For use the follow_all function call your script like this:
 
-   python follpector.py --follow-all your_username
+		python follpector.py --follow-all your_username
 
 If the app your registered on Twitter to get the consumer keys you choose
 read-write permission then it will work, otherwise not, 'cause you write
@@ -37,7 +37,7 @@ with crontab on GNU/Linux so you will get the report by email and it wouldn't
 care to execute for yourself the script. You could redirect the standard output
 and error to a file, something like this:
 
-   python follpector.py --follow-all n3x07 > ~/home/alex/.follpector.log 2>&1 
+		python follpector.py --follow-all n3x07 > ~/home/alex/.follpector.log 2>&1 
 
 It should redirect all output to that file, also it would rewrite it everytime.
 You could run automatically anytime you want using  *crontab*.
