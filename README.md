@@ -44,5 +44,5 @@ You could run automatically anytime you want using  *crontab*.
 
 Feedback is appreciated. You could write me to stackncode[at]gmail[dot]com
 
-Anyway, I'm not really thinking anybody else more than me will be ever
+Anyway, I'm not really thinking anybody else more than me will ever
 use this script x)
