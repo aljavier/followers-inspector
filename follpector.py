@@ -8,7 +8,7 @@
 # Coded by A. J. - stackncode[at]gmail[dot]com                            #
 #               GPL v2 License                                            #
 #                                                                         #
-#################### REQUIREMENTS #########################################
+########################### REQUIREMENTS ##################################
 #                                                                         #
 #   * Python 2.x                                                          #
 #   * tweepy - Install with pip: pip install tweepy                       #
@@ -45,8 +45,14 @@ except:
     print("On mostly unix-like systems the easier way to install it is: pip install tweepy.")
     sys.exit(-1)
 
-# The name for the SQLite database
-DB_NAME = "tw_users.db"
+# Settings for the database location and name
+DB_NAME = "tw_users.db" # Database name
+DIR = ".follpector" # Directory where store the db
+try:
+    DIR = os.path.join(os.getenv('HOME'), DIR) # DIR = /home/user/.follpector/
+except:
+    print(traceback.format_exc())
+    sys.exit(-1)
 
 # Can be get it registering an app at https://apps.twitter.com/
 # If any of these is wrong you'wll get an HTTP Error 401: Unathorized
@@ -332,12 +338,12 @@ class TwitterInspector(object):
                 # We check if is someone who unfollowed us before and follow back again
                 for un in unfollowers:
                     if str(tw.id) == str(un['user_id']): # Without casting it always return False
-                       self.new_followers.append(dict(user_id = tw.user_id, screen_name = tw.screen_name, was_follower = True))
+                       self.new_followers.append(dict(user_id = tw.id, screen_name = tw.screen_name, was_follower = True))
                        print("And he/she unfollowed us before but now is back!!!")
                        self.__data.update(tw.id, tw.screen_name, 1) # Update is_follower from False to True
                        break
                 else: # It's a new follower, according to our db never has followed us
-                    self.new_followers.append(dict(user_id = tw.user_id, screen_name = tw.screen_name, was_follower = False))
+                    self.new_followers.append(dict(user_id = tw.id, screen_name = tw.screen_name, was_follower = False))
                     id_new = self.__data.add(tw.id, tw.screen_name, 1)
                     if id_new: print("Follower %s has succesfully been added with id %d!" % (tw.screen_name, id_new))
         # End of this crazy *loopception*
@@ -358,7 +364,7 @@ class TwitterInspector(object):
                     break
             else: # Someone who unfollowed us here ;(
                 # That follower is now an unfollower on db 0 == False on is_follower field
-                self.new_unfollowers.append(dict(user_id = tw.user_id, screen_name = tw.screen_name))
+                self.new_unfollowers.append(dict(user_id = tw.id, screen_name = tw.screen_name))
                 self.__data.update(db['user_id'], db['screen_name'], 0) 
                 if not any_unfollower: any_unfollower = True
                 print("Vaya! Someone named %s has unfollowed you!" % db['screen_name'])
@@ -423,7 +429,7 @@ class TwitterInspector(object):
         print("SHOWING ALL UNFOLLOWERS IN OUR DATABASE RIGHT NOW")
         print("=" * 80)
         for unfollower in unfollowers:
-            quantity_unfollowers += count
+            quantity_unfollowers += 1
             time_ago = self.get_time_ago(unfollower['date'])
             print("\t[-] {0} - https://twitter.com/{0} {1}".format(unfollower['screen_name'], time_ago))
         print("\nTOTAL OF UNFOLLOWERS: %d" % quantity_unfollowers)
@@ -437,7 +443,7 @@ class TwitterInspector(object):
                 print(temp)
                 if send_by_mail: message += temp
         else:
-            print("We do not have new followers this time :(")     
+            print("\nWe do not have new followers this time :(")     
         if send_by_mail:
             message += "\nTotal of new unfollowers: %d" % len(self.new_unfollowers) 
             message += "\n\n"
@@ -449,7 +455,7 @@ class TwitterInspector(object):
                 print(temp)
                 if send_by_mail: message += temp
         else:
-            print("We do not have new unfollowers this time!!! Awesome right?!!")
+            print("\nWe do not have new unfollowers this time!!! Awesome right?!!")
         
         if send_by_mail:
             message += "\nTotal of new followers: %d" % len(self.new_unfollowers) 
@@ -489,9 +495,16 @@ class TwitterInspector(object):
 # End of class TwitterInspector
 
 
+def main():
+    full_path = os.path.join(DIR, DB_NAME)
+    if not os.path.exists(DIR):
+        try:
+            os.mkdir(DIR)
+        except:
+            print("There was an error trying to create directory %s" % DIR)
+            print(traceback.format_exc())
 
-if __name__ == '__main__':
-    client = TwitterInspector(DB_NAME, CONSUMER_KEY, CONSUMER_SECRET) 
+    client = TwitterInspector(full_path, CONSUMER_KEY, CONSUMER_SECRET) 
 
     if len(sys.argv) >= 2 and sys.argv[1] == "--follow-all":
         if len(sys.argv) > 2:
@@ -504,7 +517,14 @@ if __name__ == '__main__':
     if MAIL:
         client.show_report(mail=True, **MAIL)
     else:
-        client.show_report()
+        client.show_report() 
+
+
+
+if __name__ == '__main__':
+    main()
+
+   
 
         
     
