@@ -49,7 +49,7 @@ except:
 DB_NAME = "tw_users.db" # Database name
 DIR = ".follpector" # Directory where store the db
 try:
-    DIR = os.path.join(os.getenv('HOME'), DIR) # DIR = /home/user/.follpector/
+    DIR = os.path.join(os.path.expanduser("~"), DIR) # DIR = /home/user/.follpector/
 except:
     print(traceback.format_exc())
     sys.exit(-1)
