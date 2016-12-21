@@ -33,10 +33,8 @@ import sys
 import os
 import traceback 
 import smtplib
-from email.MIMEMultipart import MIMEMultipart
-from email.MIMEText import MIMEText
 
-# If tweepy is not installed exit
+# import tweepy
 try:
     import tweepy
 except:
@@ -45,11 +43,21 @@ except:
     print("On mostly unix-like systems the easier way to install it is: pip install tweepy.")
     sys.exit(-1)
 
+try: 
+    # Python 2.x.x
+    from email.MIMEMultipart import MIMEMultipart
+    from email.MIMEText import MIMEText
+except: 
+    # Python 3.x.x
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
 # Settings for the database location and name
 DB_NAME = "tw_users.db" # Database name
-DIR = ".follpector" # Directory where store the db
+DIR = "follpector_db" # Directory where store the db
+
 try:
-    DIR = os.path.join(os.path.expanduser("~"), DIR) # DIR = /home/user/.follpector/
+    DIR = os.path.join(os.path.expanduser("~"), DIR) # e.g. DIR = /home/user/.follpector/
 except:
     print(traceback.format_exc())
     sys.exit(-1)
@@ -57,7 +65,7 @@ except:
 # Can be get it registering an app at https://apps.twitter.com/
 # If any of these is wrong you'wll get an HTTP Error 401: Unathorized
 CONSUMER_KEY = "YOUR_CONSUMER_KEY"
-CONSUMER_SECRET = "YOUR_CONSUMER_SECRET"
+CONSUMER_SECRET = "YOUR_CONSUMR_SECRET"
 
 # Dictionary for the send_mail function, use this keys: 
 # 'to' for recipient, 'from' for the gmail email use to 
@@ -66,6 +74,15 @@ CONSUMER_SECRET = "YOUR_CONSUMER_SECRET"
 #'from' : '0x3d@eviless.com', 'passwd' : 'highlysecure123' }
 MAIL = {}
 
+def get_user_input(message):
+    """Method to get user input, valid for python 2.x and 3.x"""
+    answer=''
+    try: 
+        answer = raw_input(message)
+    except:
+        answer = input(message)
+    return answer
+        
 
 class SQLiteConnection(object):
     """class for the data persistence on database  SQLite."""
@@ -227,8 +244,6 @@ class SQLiteConnection(object):
 
 # End of class SQLiteConnection            
 
-
-
 class TwitterInspector(object):
     """The class that interact with the Twitter API throught tweepy library."""
    
@@ -253,26 +268,26 @@ class TwitterInspector(object):
         if credentials is None:
             key = secret = None
             print("There aren't any credentials in the database!!!")
-            answer = raw_input("Would do you like to add any now? >>> ")
+            answer = get_user_input("Would do you like to add any now? >>> ")
             answer = answer.strip().lower()
             if answer == "yes" or answer == "y":
-                answer = raw_input("Do you have already your access token? >>> ")
+                answer = get_user_input("Do you have already your access token? >>> ")
                 answer = answer.strip().lower()
                 if answer == "yes" or answer == "y":
-                    key = raw_input("Please enter the access token key >>> ")
-                    secret = raw_input("Ok. Now please, enter the access token secret >>> ")
+                    key = get_user_input("Please enter the access token key >>> ")
+                    secret = get_user_input("Ok. Now please, enter the access token secret >>> ")
                     try:
                         self.__auth.set_access_token(key, secret)
                         self.__data.raw_sql("INSERT INTO credentials('key', 'secret') VALUES('%s', '%s')" % (key, secret))
                     except tweepy.TweepError:
                         print("Error trying to set access_token, see below for more info")
                         print(traceback.format_exc())
-                        print("/!\ Critial error! Quitting now! /!\\")
+                        print("/!\ Critical error! Quitting now! /!\\")
                         sys.exit(-1)
                 else: 
                     url = self.__auth.get_authorization_url()
                     print("Ok. Authorize the application in the following url and copy the code\n>>> %s" % url)
-                    verifier = raw_input("Please introduce the verifier code you got >>> ").strip()
+                    verifier = get_user_input("Please introduce the verifier code you got >>> ").strip()
                     try:
                        self.__auth.get_access_token(verifier) 
                        key = self.__auth.access_token.key
@@ -281,9 +296,9 @@ class TwitterInspector(object):
                     except tweepy.TweepError:
                         print("Error trying to get access_token, see below for more info")
                         print(traceback.format_exc())
-                        print("/!\ Critial error! Quitting now! /!\\")
+                        print("/!\ Critical error! Quitting now! /!\\")
                         sys.exit(-1)    
-                raw_input("Access token stored on database! Please, press ENTER to continue...")
+                get_user_input("Access token stored on database! \nPlease, press ENTER to continue...")
             else:
                 print("You didn't answer yes and without access token we cannot work, so...")
                 print("Good bye old friend!")
@@ -308,10 +323,7 @@ class TwitterInspector(object):
             print("/!\ It's a critical error! So we quitting now...\nGood bye!")
             sys.exit(-1)
 
-    # I'm not thinking in use this methd, but is usefull for some folks
-    # The reason why I don't wanna use it, it's because I don't like the data
-    # I have to provide to twitter to allow me do this, like my phone number.
-    # Yeah, I know, I'm very paranoid, but paranoid is good...most of the time.
+    # I'm not thinking in using this method, but is usefull for some folks
     # So, this method have not been tested, but should work, right? right?! :=]
     def follow_all(self, user_name):
         """This method will follow everybody that follow you(if you have read-write permissions."""
@@ -323,63 +335,55 @@ class TwitterInspector(object):
 
 
     def process_followers(self):
-        """This is the method that process(determine) the followers."""
+        """This is the method that process(determine) the new followers."""
         db_followers = self.__data.get_all(is_follower=1) 
         unfollowers = self.__data.get_all(is_follower=0)
         followers = tweepy.Cursor(self.api.followers).items()
-        # Structural is kind of more suitable than functional in this case
-        for tw in followers:
-            for db in db_followers:
-                # If tw is already a registered follower in our db we jump to check the others if any
-                if str(tw.id) == str(db['user_id']): # I don't why but it's always is False without the casting 
-                    break
+        
+        db_user_ids = [ str(u['user_id']) for u in db_followers ]    
+        new_followers = [ f for f in followers if str(f.id) not in db_user_ids ]
+        
+        if not new_followers: return
+        
+        for f in new_followers:
+            was_follower_before = (len([ u for u in unfollowers if str(u['user_id']) == str(f.id) and str(f.id) not in db_user_ids ]) > 0)
+            self.new_followers.append(dict(user_id=f.id, screen_name=f.screen_name, was_follower=was_follower_before ))
+            print("We have a new follower and his/her name is %s!" % f.screen_name)
+            if was_follower_before:
+                self.__data.update(f.id, f.screen_name, is_follower=1)
+                print("...and he/she unfollowed us before but now is back!")
             else:
-                print("We have a new follower and his/her name is %s!" % tw.screen_name)
-                # We check if is someone who unfollowed us before and follow back again
-                for un in unfollowers:
-                    if str(tw.id) == str(un['user_id']): # Without casting it always return False
-                       self.new_followers.append(dict(user_id = tw.id, screen_name = tw.screen_name, was_follower = True))
-                       print("And he/she unfollowed us before but now is back!!!")
-                       self.__data.update(tw.id, tw.screen_name, 1) # Update is_follower from False to True
-                       break
-                else: # It's a new follower, according to our db never has followed us
-                    self.new_followers.append(dict(user_id = tw.id, screen_name = tw.screen_name, was_follower = False))
-                    id_new = self.__data.add(tw.id, tw.screen_name, 1)
-                    if id_new: print("Follower %s has succesfully been added with id %d!" % (tw.screen_name, id_new))
-        # End of this crazy *loopception*
+                id_new = self.__data.add(f.id, f.screen_name, is_follower=1)
+                if id_new: 
+                    print("Follower %s has succesfully been added to the database!" % (f.screen_name))
+                else:
+                    print("Couldn't add user %s, something wrong happened!" % (f.screen_name))
 
-   
+
     def process_unfollowers(self):
         """Method for process (determine) new unfollowers."""
         db_followers = self.__data.get_all(is_follower=1) 
         followers = tweepy.Cursor(self.api.followers).items()
-        # Structural is kind of more suitable than functional in this case
-        any_unfollower = False
-        # We go structural again here as in the previous one, I don't see other way
-        for db in db_followers:
-            if not followers: break # If there are any friends we have on our twitter then break
-            for tw in followers:
-                # We jump to other element if any, 'cause this is not an unfollower
-                if str(db['user_id']) == str(tw.id): # I don't know why but it's always is False without the casting 
-                    break
-            else: # Someone who unfollowed us here ;(
-                # That follower is now an unfollower on db 0 == False on is_follower field
-                self.new_unfollowers.append(dict(user_id = tw.id, screen_name = tw.screen_name))
-                self.__data.update(db['user_id'], db['screen_name'], 0) 
-                if not any_unfollower: any_unfollower = True
-                print("Vaya! Someone named %s has unfollowed you!" % db['screen_name'])
-                print("This is the profile of the *individual* https://twitter.com/%s" % db['screen_name'])
-        if not any_unfollower:
-            print("Awesome, nobody have unfollowed you!")
+        
+        tw_user_ids = [ str(u.id) for u in followers ]  
+        unfollowers = [ u for u in db_followers if str(u['user_id']) not in tw_user_ids ] # Users who unfollowed us ;(
+        
+        if not unfollowers: return
+        
+        for u in unfollowers:
+            self.new_unfollowers.append(dict(user_id = u.id, screen_name = u.screen_name))
+            self.__data.update(u.user_id, u.screen_name, is_follower=0)
+            
+            print("Vaya! Someone named %s has unfollowed you!" % u.screen_name)
+            print("This is the profile of the *individual* https://twitter.com/%s" % u.screen_name)
+            
     
-
     def process_all(self):
          """Method for initialize and execute all (un)followers operations."""
          self.initialize()
          self.process_followers()
          self.process_unfollowers()
 
-    
     def get_time_ago(self,  date):
         """This method returns *inteligently* the time ago.""" 
         # We obtain the time in seconds since this person is (un)following us according to our database
@@ -399,67 +403,25 @@ class TwitterInspector(object):
 
     def show_report(self, mail=False, **kwargs):
         """This method will execute process_all  and show the report."""
-        # Process and determine new unfollowers and followers
-        self.process_all() 
-        # Get new updated list of followers
-        db_followers = self.__data.get_all(is_follower=1)
-        # Get new updated list of unfollowers
-        unfollowers = self.__data.get_all(is_follower=0)
+        db_followers = self.__data.get_all(is_follower=1) # Get new updated list of followers
+        unfollowers = self.__data.get_all(is_follower=0) # Get new updated list of unfollowers
         send_by_mail = False
-        message = ""
+      
         if mail and kwargs.has_key('subject') and kwargs.has_key('to') \
                 and kwargs.has_key('from') and kwargs.has_key('passwd'):
             send_by_mail = True
-        quantity_followers = 0
-        quantity_unfollowers = 0
-        # Print followers
-        print("\n")
-        print("=" * 80)
-        print("SHOWING ALL FOLLOWERS IN OUR DATABASE RIGHT NOW")
-        print("=" * 80)
-        for follower in db_followers:
-            quantity_followers += 1
-            time_ago = self.get_time_ago(follower['date'])
-            print("\t[+] {0} - https://twitter.com/{0} {1}".format(follower['screen_name'], time_ago))
-        print("\nTOTAL OF FOLLOWERS: %d" % quantity_followers)
-        
-        # Print unfollowers
-        print("\n")
-        print("=" * 80)
-        print("SHOWING ALL UNFOLLOWERS IN OUR DATABASE RIGHT NOW")
-        print("=" * 80)
-        for unfollower in unfollowers:
-            quantity_unfollowers += 1
-            time_ago = self.get_time_ago(unfollower['date'])
-            print("\t[-] {0} - https://twitter.com/{0} {1}".format(unfollower['screen_name'], time_ago))
-        print("\nTOTAL OF UNFOLLOWERS: %d" % quantity_unfollowers)
-        
-        
-        # Adding new followers to mail message - and printing
-        if len(self.new_followers) > 0:
-            print("\n\n##########     SHOWING NEW FOLLOWERS      ##########") 
-            for count, follower in enumerate(self.new_followers):
-                temp = "{0}. {1} - https://twitter.com/{1}\n".format(count, follower['screen_name']) 
-                print(temp)
-                if send_by_mail: message += temp
-        else:
-            print("\nWe do not have new followers this time :(")     
-        if send_by_mail:
-            message += "\nTotal of new unfollowers: %d" % len(self.new_unfollowers) 
-            message += "\n\n"
-        # Adding new unfollowers to mail message and printing to console again
-        if len(self.new_unfollowers) > 0:
-            print("\n\n##########     SHOWING NEW UNFOLLOWERS     ##########")
-            for count, follower in enumerate(self.new_unfollowers):
-                temp = "{0}. {1} - https://twitter.com/{1}\n".format(count, follower['screen_name'])
-                print(temp)
-                if send_by_mail: message += temp
-        else:
-            print("\nWe do not have new unfollowers this time!!! Awesome right?!!")
+
+        message = "=" * 70
+        message += "\n\t\t\t\t(UN)FOLLOWERS INFORMATION FROM DATABASE\n"
+        message += "=" * 70
+        message += "\nTotal of followers: %d" % len(self.__data.get_all(is_follower=1))
+        message += "\nTotal of unfollowers: %d" % len(self.__data.get_all(is_follower=0))
+        message += "\nTotal of new unfollowers: %d" % len(self.new_unfollowers) 
+        message += "\nTotal of new followers: %d" % len(self.new_unfollowers) 
+            
+        print(message)
         
         if send_by_mail:
-            message += "\nTotal of new followers: %d" % len(self.new_unfollowers) 
-            message += "\n\nGod bless you!"
             self.send_mail(kwargs.get('from'), kwargs.get('passwd'),kwargs.get('to'), kwargs.get('subject'), message)
 
 
@@ -496,36 +458,38 @@ class TwitterInspector(object):
 
 
 def main():
-    full_path = os.path.join(DIR, DB_NAME)
-    if not os.path.exists(DIR):
-        try:
-            os.mkdir(DIR)
-        except:
-            print("There was an error trying to create directory %s" % DIR)
-            print(traceback.format_exc())
+    try:
+        full_path = os.path.join(DIR, DB_NAME)
+        
+        if not os.path.exists(DIR): os.mkdir(DIR)
+        
+        client = TwitterInspector(full_path, CONSUMER_KEY, CONSUMER_SECRET) 
 
-    client = TwitterInspector(full_path, CONSUMER_KEY, CONSUMER_SECRET) 
-
-    if len(sys.argv) >= 2 and sys.argv[1] == "--follow-all":
-        if len(sys.argv) > 2:
-            client.follow_all(sys.argv[2]) # sys.argv[2] == twitter user_name
+        if len(sys.argv) >= 2 and sys.argv[1] == "--follow-all":
+            if len(sys.argv) > 2:
+                client.follow_all(sys.argv[2]) # sys.argv[2] == twitter user_name
+            else:
+                print("You must provide your username to use the follow_all function!")
+                print("e.g. %s --follow-all MegaMind" % sys.argv[0])
+                sys.exit(-1)
+                
+        client.process_all() # Get new followers and determine unfollowers
+        
+        if MAIL: 
+            client.show_report(mail=True, **MAIL) 
         else:
-            print("You must provide your username to use the follow_all function!")
-            print("e.g. %s --follow-all MegaMind" % sys.argv[0])
-            sys.exit(-1)
-
-    if MAIL:
-        client.show_report(mail=True, **MAIL)
-    else:
-        client.show_report() 
-
+                client.show_report() 
+    except tweepy.error.RateLimitError as error:
+        print("It seems like we exceeded the amount of requests allowed from Twitter!")
+        print(error)
+        print("Try later in a couple of minutes!")
+    except:
+        print("Oh oh, something wrong happened!")
+        print(traceback.format_exc())
 
 
 if __name__ == '__main__':
     main()
-
-   
-
         
     
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4

@@ -114,7 +114,6 @@ you probably know all this, even more than me maybe, but I just write this just 
 CONTACT
 --------
 
-Feedback is appreciated. You could write me to `stackncode[at]gmail[dot]com`.
+Feedback is appreciated. You can write me to `stackncode[at]gmail[dot]com` or find me on twiiter 
+[@aljavi3r](https://twitter.com/aljavi3r).
 
-
-Anyway, I'm not really thinking anybody else more than me will ever use this script, seriously x)
