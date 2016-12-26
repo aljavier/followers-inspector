@@ -478,7 +478,7 @@ def main():
         if MAIL: 
             client.show_report(mail=True, **MAIL) 
         else:
-                client.show_report() 
+            client.show_report() 
     except tweepy.error.RateLimitError as error:
         print("It seems like we exceeded the amount of requests allowed from Twitter!")
         print(error)
